@@ -1,0 +1,215 @@
+commit ab8be2663fca662398983a9372f5ee1c39cb2862
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Thu Nov 17 13:56:19 2022 +0000
+
+    Version v1.60.1
+
+commit 9e2aaa0f673d1917c6401a35a7e7061302bc8276
+Author: asdffdsazqqq <90116442+asdffdsazqqq@users.noreply.github.com>
+Date:   Tue Nov 15 12:58:43 2022 -0500
+
+    docs: faq: how to use a proxy server that requires a username and password - fixes #6565
+
+commit f8997b833622710cdd6685930dd9d3eec7313575
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 15 09:51:30 2022 +0000
+
+    webdav: fix Move/Copy/DirMove when using -server-side-across-configs
+    
+    Before this change, when using -server-side-across-configs rclone
+    would direct Move/Copy/DirMove to the destination server.
+    
+    However this should be directed to the source server. This is a little
+    unclear in the RFC, but the name of the parameter "Destination:" seems
+    clear and this is how dCache and Rucio have implemented it.
+    
+    See: https://forum.rclone.org/t/webdav-copy-request-implemented-incorrectly/34072/
+
+commit 567d8fc8d12b6b05bd5b069b4de9f36783452b1e
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 15 09:32:36 2022 +0000
+
+    smb: fix Failed to sync: context canceled at the end of syncs
+    
+    Before this change we were putting connections into the connection
+    pool which had a local context in.
+    
+    This meant that when the operation had finished the context was
+    cancelled and the connection became unusable.
+    
+    See: https://forum.rclone.org/t/failed-to-sync-context-canceled/34017/
+
+commit 4ffe9dcfef5557e536f9fc094370a408c11f6359
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Mon Oct 17 16:46:59 2022 +0100
+
+    vfs: fix deadlock caused by cache cleaner and upload finishing
+    
+    Before this patch a deadlock could occur if the cache cleaner was
+    running when an object upload finished.
+    
+    This fixes the problem by delaying marking the object as clean until
+    we have notified the VFS layer. This means that the cache cleaner
+    won't consider the object until **after** the VFS layer has been
+    notified, thus avoiding the deadlock.
+    
+    See: https://forum.rclone.org/t/rclone-mount-deadlock-when-dir-cache-time-strikes/33486/
+
+commit 6d0824954b84ac01fb9d6ca81df4c5a46a73efc9
+Author: techknowlogick <matti@mdranta.net>
+Date:   Fri Nov 11 05:19:27 2022 +0000
+
+    s3: Add additional Wasabi locations
+
+commit 1a5160c7aa5b23b1ffceeb106a444fc0875fc31a
+Author: Aaron Gokaslan <aaronGokaslan@gmail.com>
+Date:   Thu Nov 10 06:52:59 2022 -0500
+
+    s3: fix for unchecked err value in s3 listv2
+
+commit 5012f78c45441220160bb5135fc5d80e42b38b72
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Mon Nov 14 17:59:33 2022 +0000
+
+    local: fix -L/--copy-links with filters missing directories
+    
+    In this commit
+    
+    8d1fff9a8237c64f local: obey file filters in listing to fix errors on excluded files
+    
+    We introduced the concept of local backend filters.
+    
+    Unfortunately the filters were being applied before we had resolved
+    the symlink to point to a directory. This meant that symlinks pointing
+    to directories were filtered out when they shouldn't have been.
+    
+    This was fixed by moving the filter check until after the symlink had
+    been resolved.
+    
+    See: https://forum.rclone.org/t/copy-links-not-following-symlinks-on-1-60-0/34073/7
+
+commit 8f3741419f387d11fa46784758446b2c6317fc02
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 8 15:47:10 2022 +0000
+
+    mailru: allow timestamps to be before the epoch 1970-01-01
+    
+    Fixes #6547
+
+commit 91afa14d28482da759398b4f9961e47f1892a5fa
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 8 11:44:03 2022 +0000
+
+    lib/cache: fix alias backend shutting down too soon
+    
+    Before this patch, when an alias backend was created it would be
+    renamed to be canonical and in the process Shutdown would be called on
+    it. This was particularly noticeable with the dropbox backend which
+    gave this error when uploading files after the backend was Shutdown.
+    
+        Failed to copy: upload failed: batcher is shutting down
+    
+    This patch fixes the cache Rename code not to finalize objects if the
+    object that is being overwritten is the same as the existing object.
+    
+    See: https://forum.rclone.org/t/upload-failed-batcher-is-shutting-down/33900
+
+commit 4038c2c316a447c1067b88ea7c6157d7560aba37
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 8 20:31:26 2022 +0000
+
+    mailru: note that an app password is now needed - fixes #6398
+
+commit ed7c286ef694ffc2e789b7b01fa1c56f50b965fc
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 8 16:11:34 2022 +0000
+
+    docs: remove link to rclone slack as it is no longer supported
+
+commit 0866a7b6e20424441fba819bc09de105eb0a075b
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Tue Nov 8 12:13:19 2022 +0000
+
+    s3: allow Storj to server side copy since it seems to work now - fixes #6550
+
+commit ac38744e69b5aedc94e3a9328dbde97d138ab137
+Author: João Henrique Franco <joaohenrique.franco@gmail.com>
+Date:   Mon Nov 7 09:13:23 2022 -0300
+
+    wasm: fix walltime link error by adding up-to-date wasm_exec.js
+    
+    Solves link error while running rclone's wasm version. Go's `walltime1` function was renamed to `walltime`. This commit updates wasm_exec.js with the new name.
+
+commit dfc21a5b9ebe651ed6e9135e5ec5bcc360ab3a71
+Author: Clément Notin <clement.notin@gmail.com>
+Date:   Mon Nov 7 07:50:21 2022 +0000
+
+    docs: fix character that was incorrectly interpreted as markdown
+
+commit ff408f530925762bbbb2d3273c8abf2a30a9778a
+Author: Joda Stößer <services+github@simjo.st>
+Date:   Mon Nov 7 04:38:40 2022 +0100
+
+    docs: fix typo `remove` in rclone_serve_restic command
+
+commit e2d2a05361969991e59368ba46e21fba56e6b54b
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Fri Oct 28 23:23:29 2022 +0100
+
+    s3: add provider quirk --s3-might-gzip to fix corrupted on transfer: sizes differ
+    
+    Before this change, some files were giving this error when downloaded
+    from Cloudflare and other providers.
+    
+        ERROR corrupted on transfer: sizes differ NNN vs MMM
+    
+    This is because these providers auto gzips the object when rclone
+    wasn't expecting it to. (AWS does not gzip objects without their being
+    uploaded gzipped).
+    
+    This patch adds a quirk to for fix the problem and a flag to control
+    it. The quirk `might_gzip` is set to `true` for all providers except
+    AWS.
+    
+    See: https://forum.rclone.org/t/s3-error-corrupted-on-transfer-sizes-differ-nnn-vs-mmm/33694/
+    Fixes: #6533
+
+commit e8002c66a9778d98b5a7e6f5678a2c972b642577
+Author: albertony <12441419+albertony@users.noreply.github.com>
+Date:   Mon Oct 31 21:12:14 2022 +0100
+
+    docs: add direct download link for windows arm64
+
+commit 6f207668c22ffc6738e402e15cd1a7345e1ed22b
+Author: coultonluke <luke@luke.org.uk>
+Date:   Mon Oct 31 20:09:53 2022 +0000
+
+    docs: corrected download links in windows install docs
+
+commit a2491719a19ecc2d9be70b6c1960bfc8d150274e
+Author: Manoj Ghosh <manoj.ghosh@oracle.com>
+Date:   Fri Oct 28 11:32:17 2022 -0700
+
+    oracle-object-storage: doc fix
+    
+    See #6521
+
+commit 29e1c68ee0c31cbce2b069f3eaf75e9b0e2a38dc
+Author: albertony <12441419+albertony@users.noreply.github.com>
+Date:   Fri Oct 21 14:20:24 2022 +0200
+
+    local: clean absolute paths - fixes #6493
+
+commit 05040cc504a6b8306d5b2f063ea4f283cf987c66
+Author: Samuel Johnson <esamueljohnson@gmail.com>
+Date:   Sun Oct 23 15:45:09 2022 +0530
+
+    docs: Update faq.md with bisync
+    
+    Updated FAQ to clarify that experimental bi-sync is now available.
+
+commit 6944f28dc2777525ae1cbb1c296aed31ebb09f61
+Author: Nick Craig-Wood <nick@craig-wood.com>
+Date:   Fri Nov 4 16:57:08 2022 +0000
+
+    Start v1.60.1-DEV development
