@@ -35,7 +35,7 @@ def _def_batch_resp(id, resp, exception):
 
 def _list_sas(iam, project):
     try:
-        resp = iam.projects().serviceAccounts().list(name='projects/' + project, pageSize=100).execute()
+        resp = iam.projects().serviceAccounts().list(name=f'projects/{project}', pageSize=100).execute()
         return resp.get('accounts', [])
     except HttpError as e:
         print(f"Error listing service accounts for project {project}: {e}")
@@ -55,7 +55,7 @@ def _create_remaining_accounts(iam, project):
     print(f"Starting service account creation in project: {project}")
     sa_count = len(_list_sas(iam, project))
     CHUNK_SIZE = 10
-    DELAY_BETWEEN_CHUNKS = 5
+    DELAY_BETWEEN_CHUNKS = 20
 
     while sa_count < 100:
         to_create = min(CHUNK_SIZE, 100 - sa_count)
@@ -68,8 +68,7 @@ def _create_remaining_accounts(iam, project):
     print(f"✅ Successfully ensured 100 service accounts exist in {project}.")
 
 # ##################################################################
-# ##############  这里是本次修正的核心  ##############
-#  重写了密钥下载函数，使其更健壮、可重试，并优化了文件名
+# ##############  最终、最完美的密钥下载函数  ##############
 # ##################################################################
 def _create_sa_keys(iam, project, path):
     print(f"\nStarting key creation and download for project: {project}")
@@ -80,61 +79,46 @@ def _create_sa_keys(iam, project, path):
         print(f"  - No service accounts found in {project}. Aborting key download.")
         return
 
-    print(f"  - Found {len(all_sas)} service accounts. Checking for existing keys...")
+    total_sas_count = len(all_sas)
+    print(f"  - Found {total_sas_count} service accounts. Checking and creating keys one by one...")
     
-    keys_to_create_map = {}
-    for sa in all_sas:
+    keys_created_count = 0
+    for idx, sa in enumerate(all_sas):
+        sa_email = sa.get('email', 'Unknown-SA')
+        print(f"  - Processing {idx+1}/{total_sas_count}: {sa_email}", end="", flush=True)
+        
         try:
-            # 每个SA最多有10个key，我们只在没有key时才创建
-            keys = iam.projects().serviceAccounts().keys().list(name=sa['name']).execute().get('keys', [])
-            if not keys:
-                keys_to_create_map[sa['name']] = sa['email']
-        except HttpError as e:
-            print(f"  - Warning: Could not list keys for {sa.get('email', 'Unknown SA')}: {e}")
-
-    if not keys_to_create_map:
-        print("✅ All service accounts already have keys. No new keys needed.")
-        return
-
-    print(f"  - Found {len(keys_to_create_map)} service accounts without keys. Preparing to create them...")
-    
-    # 分批创建密钥
-    sa_names = list(keys_to_create_map.keys())
-    CHUNK_SIZE = 10
-    DELAY_BETWEEN_CHUNKS = 5
-
-    for i in range(0, len(sa_names), CHUNK_SIZE):
-        chunk = sa_names[i:i + CHUNK_SIZE]
-        print(f"  - Creating keys for batch {i//CHUNK_SIZE + 1} ({len(chunk)} accounts)...")
-        
-        key_dump = []
-        def key_creation_callback(id, resp, exception):
-            if exception:
-                _def_batch_resp(id, resp, exception)
-            else:
-                key_dump.append({
-                    "email": keys_to_create_map[resp['name'].split('/keys/')[0]],
-                    "key_data": b64decode(resp['privateKeyData']).decode('utf-8')
-                })
-
-        batch = iam.new_batch_http_request(callback=key_creation_callback)
-        for name in chunk:
-            batch.add(iam.projects().serviceAccounts().keys().create(
-                name=name,
+            keys_response = iam.projects().serviceAccounts().keys().list(name=sa['name']).execute()
+            existing_keys = keys_response.get('keys', [])
+            
+            # --- 最终修正：只关心'USER_MANAGED'类型的密钥 ---
+            user_managed_keys = [key for key in existing_keys if key.get('keyType') == 'USER_MANAGED']
+            
+            if user_managed_keys:
+                print(" -> User-managed key already exists, skipping.")
+                continue
+            
+            # 如果没有用户密钥，就为其创建一个
+            key = iam.projects().serviceAccounts().keys().create(
+                name=sa['name'],
                 body={'privateKeyType': 'TYPE_GOOGLE_CREDENTIALS_FILE', 'keyAlgorithm': 'KEY_ALG_RSA_2048'}
-            ))
-        batch.execute()
-
-        # 将下载的密钥写入文件
-        for key_info in key_dump:
-            filename = os.path.join(path, f"{key_info['email'].split('@')[0]}.json")
+            ).execute()
+            
+            key_data = b64decode(key['privateKeyData']).decode('utf-8')
+            filename = os.path.join(path, f"{sa_email.split('@')[0]}.json")
             with open(filename, 'w') as f:
-                f.write(key_info['key_data'])
-        
-        print(f"  - Wrote {len(key_dump)} key files. Waiting {DELAY_BETWEEN_CHUNKS} seconds...")
-        time.sleep(DELAY_BETWEEN_CHUNKS)
+                f.write(key_data)
+            
+            keys_created_count += 1
+            print(" -> New key created and saved.")
+            
+            time.sleep(0.2)
 
-    print(f"✅ Key download process complete. JSON files are in '{path}' folder.")
+        except HttpError as e:
+            print(f" -> ERROR: Failed to process key for {sa_email}: {e}")
+
+    print(f"\n✅ Key generation process complete. Created {keys_created_count} new key(s).")
+    print(f"JSON files are in the '{path}' folder.")
 
 # --- Main Authentication and Orchestration ---
 
@@ -177,6 +161,10 @@ if __name__ == '__main__':
 
     if not (args.create_sas or args.download_keys):
         print("Error: You must specify either --create-sas or --download-keys (or both).")
+        sys.exit(1)
+    
+    if not os.path.exists(args.credentials):
+        print(f"Error: Credentials file not found at '{args.credentials}'")
         sys.exit(1)
 
     serviceaccountfactory(
