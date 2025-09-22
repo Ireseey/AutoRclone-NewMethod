@@ -55,7 +55,7 @@ def _create_remaining_accounts(iam, project):
     print(f"Starting service account creation in project: {project}")
     sa_count = len(_list_sas(iam, project))
     CHUNK_SIZE = 4
-    DELAY_BETWEEN_CHUNKS = 40
+    DELAY_BETWEEN_CHUNKS = 20
 
     while sa_count < 100:
         to_create = min(CHUNK_SIZE, 100 - sa_count)
