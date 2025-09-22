@@ -54,7 +54,7 @@ def _create_accounts_batch(iam, project, count):
 def _create_remaining_accounts(iam, project):
     print(f"Starting service account creation in project: {project}")
     sa_count = len(_list_sas(iam, project))
-    CHUNK_SIZE = 10
+    CHUNK_SIZE = 4
     DELAY_BETWEEN_CHUNKS = 20
 
     while sa_count < 100:
